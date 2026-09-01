@@ -301,15 +301,22 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         return res.status(400).json({ error: 'No channel configured for chore announcements. Set CHORE_CHANNEL_ID or create a channel named "chores".' });
       }
 
-      const thisWeekStart = getMonday(new Date());
-      await sendChoreChart(targetChannelId, targetGuildId, thisWeekStart, 'This week');
-
-      return res.send({
+      // Respond immediately to avoid the 3s interaction timeout, then post in background
+      res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'The chore chart has been posted to the channel.',
+          content: 'Posting chore chart to the channel — you will see it shortly.',
+          flags: InteractionResponseFlags.EPHEMERAL,
         },
       });
+
+      const thisWeekStart = getMonday(new Date());
+      // fire-and-forget, log any errors
+      sendChoreChart(targetChannelId, targetGuildId, thisWeekStart, 'This week').catch((err) => {
+        console.error('Failed to post chore chart after ack', err);
+      });
+
+      return;
     }
     if (name === 'join') {
       const targetGuildId = guild_id || process.env.GUILD_ID;
