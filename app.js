@@ -15,6 +15,8 @@ const PORT = process.env.PORT || 3000;
 const CHORE_LIST = parseChoreList(process.env.CHORES || 'Guest bathroom, Kitchen, Living room, Floors, Garbage');
 const SUNDAY_HOUR = Number(process.env.CHORE_ANNOUNCEMENT_HOUR || 21);
 const SUNDAY_MINUTE = Number(process.env.CHORE_ANNOUNCEMENT_MINUTE || 0);
+const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
+const GUILD_ID = process.env.GUILD_ID || null;
 const state = { lastAnnouncementKey: null };
 const DATA_FILE = path.resolve(process.cwd(), 'chore-data.json');
 
@@ -187,35 +189,7 @@ const DISHES_SCHEDULE = [
   '- **Friday**: Jayson',
 ]
 
-async function getChannelByName(guildId, name) {
-  if (!guildId) return null;
-
-  try {
-    const res = await DiscordRequest(`guilds/${guildId}/channels`, { method: 'GET' });
-    const channels = await res.json();
-    if (!Array.isArray(channels)) return null;
-
-    const match = channels.find((c) => c && c.name && c.name.toLowerCase() === name.toLowerCase());
-    return match ? match.id : null;
-  } catch (err) {
-    console.error('Failed to resolve channel by name', err);
-    return null;
-  }
-}
-
-async function resolveChoreChannel(guildId) {
-  if (process.env.CHORE_CHANNEL_ID) return process.env.CHORE_CHANNEL_ID;
-  const name = 'test-chores';
-  return await getChannelByName(guildId, name);
-}
-
-function buildAssignmentMessage(assignments, weekLabel, leadInText = 'This week') {
-  const lines = assignments.map(({ chore, assignee }) => `- ${chore}: ${assignee}`);
-  const intro = `**${leadInText} chore chart (${weekLabel})**\n${lines.join('\n')}`;
-  return intro;
-}
-
-async function sendChoreChart(channelId, guildId, weekStartDate, label) {
+async function sendChoreChart(guildId, weekStartDate, label) {
   // Prefer explicit joiners if present, otherwise fall back to guild members
   const joiners = getGuildJoiners(guildId);
   let memberObjs = [];
@@ -237,12 +211,12 @@ async function sendChoreChart(channelId, guildId, weekStartDate, label) {
   const mentionUserIds = assignmentsWithIds.map((a) => a.assigneeId).filter(Boolean);
   const body = { content, allowed_mentions: mentionUserIds.length ? { users: mentionUserIds } : { parse: [] } };
 
-  await DiscordRequest(`channels/${channelId}/messages`, { method: 'POST', body });
+  await DiscordRequest(`channels/${CHANNEL_ID}/messages`, { method: 'POST', body });
 }
 
-async function announceNextWeek(guildId, channelId) {
+async function announceNextWeek() {
   const nextWeekStart = addDays(getMonday(new Date()), 7);
-  await sendChoreChart(channelId, guildId, nextWeekStart, 'Next week');
+  await sendChoreChart(GUILD_ID, nextWeekStart, 'Next week');
 }
 
 function shouldRunWeeklyAnnouncement() {
@@ -258,8 +232,7 @@ function scheduleSundayAnnouncements() {
   setInterval(async () => {
     if (!process.env.GUILD_ID) return;
 
-    const channelId = await resolveChoreChannel(process.env.GUILD_ID);
-    if (!channelId) return;
+    if (!CHANNEL_ID) return;
 
     if (!shouldRunWeeklyAnnouncement()) {
       return;
@@ -271,7 +244,7 @@ function scheduleSundayAnnouncements() {
     }
 
     try {
-      await announceNextWeek(process.env.GUILD_ID, channelId);
+      await announceNextWeek();
       state.lastAnnouncementKey = weekKey;
       console.log(`Posted next week's chore chart for ${weekKey}`);
     } catch (error) {
@@ -292,17 +265,13 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
     if (name === 'chorechart') {
       const targetGuildId = guild_id || process.env.GUILD_ID;
-      let targetChannelId = channel_id || process.env.CHORE_CHANNEL_ID;
-      if (!targetChannelId) {
-        targetChannelId = await resolveChoreChannel(targetGuildId);
-      }
 
-      if (!targetChannelId) {
+      if (!CHANNEL_ID) {
         return res.status(400).json({ error: 'No channel configured for chore announcements. Set CHORE_CHANNEL_ID or create a channel named "chores".' });
       }
 
       const thisWeekStart = getMonday(new Date());
-      await sendChoreChart(targetChannelId, targetGuildId, thisWeekStart, 'This week');
+      await sendChoreChart(targetGuildId, thisWeekStart, 'This week');
 
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
