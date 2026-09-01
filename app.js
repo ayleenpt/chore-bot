@@ -39,21 +39,6 @@ function saveData(data) {
   }
 }
 
-function getGuildJoiners(guildId) {
-  const d = loadData();
-  return (d.guilds && d.guilds[guildId]) || [];
-}
-
-function addGuildJoiner(guildId, user) {
-  const d = loadData();
-  d.guilds = d.guilds || {};
-  d.guilds[guildId] = d.guilds[guildId] || [];
-  if (d.guilds[guildId].some((u) => u.id === user.id)) return false;
-  d.guilds[guildId].push(user);
-  saveData(d);
-  return true;
-}
-
 function parseChoreList(rawChores) {
   return rawChores
     .split(',')
@@ -172,15 +157,9 @@ function parseIdList(rawIds) {
 }
 
 async function getRotationMembers(guildId) {
-  // Priority: explicit env list of user IDs, then persisted joiners, then guild members
   const configured = parseIdList(process.env.CHORE_ROTATING_USER_IDS || '');
   if (configured.length) {
     return configured.map((id) => ({ id, username: '' }));
-  }
-
-  const joiners = getGuildJoiners(guildId);
-  if (joiners && joiners.length) {
-    return joiners.map((u) => ({ id: u.id, username: u.username || '' }));
   }
 
   // Fallback to guild members via API
@@ -197,7 +176,6 @@ const DISHES_SCHEDULE = [
 ]
 
 async function sendChoreChart(guildId, weekStartDate, label) {
-  // Resolve rotation members (env CHORE_ROTATING_USER_IDS -> joiners -> guild members)
   const members = await getRotationMembers(guildId);
   const memberObjs = members.length ? members.map((member) => ({ id: member.id })) : [];
 
@@ -302,28 +280,6 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: { content: 'The chore chart has been posted to the channel.' },
         });
-    }
-
-    if (name === 'join') {
-      const targetGuildId = guild_id || GUILD_ID;
-      if (!targetGuildId) {
-        return res.status(400).json({ error: 'No guild configured.' });
-      }
-
-      const user = json.member?.user || json.user;
-      if (!user || !user.id) {
-        return res.status(400).json({ error: 'Could not determine user.' });
-      }
-
-      const added = addGuildJoiner(targetGuildId, { id: user.id, username: user.username || user.global_name || user.id });
-
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: added ? 'You have been added to the chore rotation.' : 'You are already in the chore rotation.',
-          flags: InteractionResponseFlags.EPHEMERAL || 64,
-        },
-      });
     }
 
     console.error(`unknown command: ${name}`);

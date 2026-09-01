@@ -10,15 +10,6 @@ const CHORECHART_COMMAND = {
   contexts: [0, 1, 2],
 };
 
-// Join command: users opt into the rotating chores
-const JOIN_COMMAND = {
-  name: 'join',
-  description: 'Join the chore chart',
-  type: 1,
-  integration_types: [0, 1],
-  contexts: [0, 1, 2],
-};
-
-const ALL_COMMANDS = [CHORECHART_COMMAND, JOIN_COMMAND];
+const ALL_COMMANDS = [CHORECHART_COMMAND];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
