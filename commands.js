@@ -1,7 +1,12 @@
 import 'dotenv/config';
-import { ClearGlobalCommands, InstallGuildCommands } from './utils.js';
+import { InstallGuildCommands } from './utils.js';
 
 const COMMANDS = [
+  {
+    name: 'help',
+    description: 'Show instructions',
+    type: 1,
+  },
   {
     name: 'chorechart',
     description: 'Post this week\'s chore chart',
@@ -32,8 +37,6 @@ const COMMANDS = [
     description: 'Show the garbage chore instructions',
     type: 1,
   },
-]
-
-await ClearGlobalCommands(process.env.APP_ID);
+];
 
 InstallGuildCommands(process.env.APP_ID, process.env.GUILD_ID, COMMANDS);
