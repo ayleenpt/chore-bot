@@ -30,6 +30,11 @@ Notes:
 - `CHORE_CHANNEL_ID` is used for automated Sunday night posts.
 - The default announcement time is Sunday at 9:00 PM in the server's local time.
 
+New optional environment variables for dishes tagging:
+
+- `CHORE_DISH_USER_IDS`: comma-separated list of five Discord user IDs to assign Mon–Fri dishes and allow tagging in messages. Example: `123,456,789,101,112`.
+- `CHORE_CHANNEL_NAME`: channel name to resolve instead of relying on `CHORE_CHANNEL_ID` (defaults to `chores`).
+
 ## Install dependencies
 
 ```bash
