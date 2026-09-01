@@ -9,6 +9,7 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { DiscordRequest } from './utils.js';
+import { CHORE_INSTRUCTIONS } from './chore-instructions.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,29 +21,17 @@ const GUILD_ID = process.env.GUILD_ID || null;
 const state = { lastAnnouncementKey: null };
 const DATA_FILE = path.resolve(process.cwd(), 'chore-data.json');
 
-function loadData() {
-  try {
-    if (!fs.existsSync(DATA_FILE)) return { guilds: {} };
-    const raw = fs.readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(raw || '{"guilds":{}}');
-  } catch (err) {
-    console.error('Failed to load data file', err);
-    return { guilds: {} };
-  }
-}
-
-function saveData(data) {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error('Failed to save data file', err);
-  }
-}
-
 function parseChoreList(rawChores) {
   return rawChores
     .split(',')
     .map((chore) => chore.trim())
+    .filter(Boolean);
+}
+
+function parseIdList(rawIds) {
+  return rawIds
+    .split(',')
+    .map((id) => id.trim())
     .filter(Boolean);
 }
 
@@ -90,17 +79,23 @@ function getDeterministicShuffle(members, seed) {
   return items;
 }
 
-function buildAssignments(members, chores, weekStart) {
-  if (!members.length) {
-    return chores.map((chore) => ({ chore, assignee: 'No members found' }));
+function buildChoreInstructions(choreName) {
+  const instructions = CHORE_INSTRUCTIONS[choreName];
+
+  if (!instructions) {
+    return 'No instructions found for this chore.';
   }
 
-  const rotation = getDeterministicShuffle(members, weekStart.getTime());
+  const title = choreName
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 
-  return chores.map((chore, index) => ({
-    chore,
-    assignee: rotation[index % rotation.length],
-  }));
+  const bullets = instructions
+    .map(instruction => `- ${instruction}`)
+    .join('\n');
+
+  return `## ${title}\n${bullets}`;
 }
 
 function buildAssignmentsWithIds(members, chores, weekStart) {
@@ -126,44 +121,9 @@ function buildAssignmentMessageWithMentions(assignments, weekLabel) {
   return `## Chore Chart - ${weekLabel}\n${lines.join('\n')}`;
 }
 
-async function getGuildMembers(guildId) {
-  if (!guildId) {
-    return [];
-  }
-
-  try {
-    const response = await DiscordRequest(`guilds/${guildId}/members?limit=100`, { method: 'GET' });
-    const members = await response.json();
-
-    return (Array.isArray(members) ? members : [])
-      .filter((member) => member?.user && !member.user.bot)
-      .map((member) => ({
-        id: member.user.id,
-        username: member.user.username,
-        nick: member.nick,
-        global_name: member.user.global_name,
-      }));
-  } catch (error) {
-    console.error('Failed to load guild members for chore rotation', error);
-    return [];
-  }
-}
-
-function parseIdList(rawIds) {
-  return rawIds
-    .split(',')
-    .map((id) => id.trim())
-    .filter(Boolean);
-}
-
 async function getRotationMembers(guildId) {
   const configured = parseIdList(process.env.CHORE_ROTATING_USER_IDS || '');
-  if (configured.length) {
-    return configured.map((id) => ({ id, username: '' }));
-  }
-
-  // Fallback to guild members via API
-  return await getGuildMembers(guildId);
+  return configured.map((id) => ({ id, username: '' }));
 }
 
 const DISHES_SCHEDULE = [
@@ -185,7 +145,7 @@ async function sendChoreChart(guildId, weekStartDate, label) {
   // Build dishes schedule (this section does not ping users)
   const dishesScheduleText = DISHES_SCHEDULE.join('\n');
 
-  const content = `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel, label)}\n${dishesScheduleText}`;
+  const content = `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel)}\n${dishesScheduleText}`;
 
   const mentionUserIds = assignmentsWithIds.map((a) => a.assigneeId).filter(Boolean);
   const body = { content, allowed_mentions: mentionUserIds.length ? { users: mentionUserIds } : { parse: [] } };
@@ -257,29 +217,39 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
   if (type === InteractionType.APPLICATION_COMMAND) {
     const { name } = data;
 
-      if (name === 'chorechart') {
-        const targetGuildId = guild_id || GUILD_ID;
+    if (name === 'chorechart') {
+      const targetGuildId = guild_id || GUILD_ID;
 
-        if (!targetGuildId) {
-          return res.status(400).json({ error: 'No guild configured.' });
-        }
+      if (!targetGuildId) {
+        return res.status(400).json({ error: 'No guild configured.' });
+      }
 
-        if (!CHANNEL_ID) {
-          return res.status(400).json({ error: 'No channel configured for chore announcements. Set CHORE_CHANNEL_ID in .env.' });
-        }
+      if (!CHANNEL_ID) {
+        return res.status(400).json({ error: 'No channel configured for chore announcements. Set CHORE_CHANNEL_ID in .env.' });
+      }
 
-        const thisWeekStart = getMonday(new Date());
-        try {
-          await sendChoreChart(targetGuildId, thisWeekStart, 'This week');
-        } catch (err) {
-          console.error('Failed to post chore chart', err);
-          return res.status(500).json({ error: 'failed to post chore chart' });
-        }
+      const thisWeekStart = getMonday(new Date());
+      try {
+        await sendChoreChart(targetGuildId, thisWeekStart, 'This week');
+      } catch (err) {
+        console.error('Failed to post chore chart', err);
+        return res.status(500).json({ error: 'failed to post chore chart' });
+      }
 
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { content: 'The chore chart has been posted to the channel.' },
-        });
+      return res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { content: 'The chore chart has been posted to the channel.' },
+      });
+    }
+
+    if (CHORE_INSTRUCTIONS[name]) {
+      return res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: buildChoreInstructions(name),
+          flags: InteractionResponseFlags.EPHEMERAL,
+        },
+      });
     }
 
     console.error(`unknown command: ${name}`);

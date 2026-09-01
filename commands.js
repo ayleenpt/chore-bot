@@ -1,15 +1,39 @@
 import 'dotenv/config';
-import { InstallGlobalCommands } from './utils.js';
+import { ClearGlobalCommands, InstallGuildCommands } from './utils.js';
 
-// Chorechart command
-const CHORECHART_COMMAND = {
-  name: 'chorechart',
-  description: 'Post this week\'s chore chart',
-  type: 1,
-  integration_types: [0, 1],
-  contexts: [0, 1, 2],
-};
+const COMMANDS = [
+  {
+    name: 'chorechart',
+    description: 'Post this week\'s chore chart',
+    type: 1,
+  },
+  {
+    name: 'kitchen',
+    description: 'Show the kitchen chore instructions',
+    type: 1,
+  },
+  {
+    name: 'guest-bathroom',
+    description: 'Show the guest bathroom chore instructions',
+    type: 1,
+  },
+  {
+    name: 'living-room',
+    description: 'Show the living room chore instructions',
+    type: 1,
+  },
+  {
+    name: 'floors',
+    description: 'Show the floor chore instructions',
+    type: 1,
+  },
+  {
+    name: 'garbage',
+    description: 'Show the garbage chore instructions',
+    type: 1,
+  },
+]
 
-const ALL_COMMANDS = [CHORECHART_COMMAND];
+await ClearGlobalCommands(process.env.APP_ID);
 
-InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
+InstallGuildCommands(process.env.APP_ID, process.env.GUILD_ID, COMMANDS);

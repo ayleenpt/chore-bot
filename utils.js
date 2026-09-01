@@ -24,24 +24,24 @@ export async function DiscordRequest(endpoint, options) {
   return res;
 }
 
-export async function InstallGlobalCommands(appId, commands) {
-  // API endpoint to overwrite global commands
-  const endpoint = `applications/${appId}/commands`;
+export async function InstallGuildCommands(appId, guildId, commands) {
+  const endpoint = `applications/${appId}/guilds/${guildId}/commands`;
 
   try {
-    // This is calling the bulk overwrite endpoint: https://discord.com/developers/docs/interactions/application-commands#bulk-overwrite-global-application-commands
-    await DiscordRequest(endpoint, { method: 'PUT', body: commands });
+    const response = await DiscordRequest(endpoint, {
+      method: 'PUT',
+      body: commands,
+    });
+
+    const registeredCommands = await response.json();
+
+    console.log('Successfully registered guild commands:');
+
+    for (const command of registeredCommands) {
+      console.log(`  /${command.name}`);
+    }
   } catch (err) {
+    console.error('Failed to register guild commands:');
     console.error(err);
   }
-}
-
-// Simple method that returns a random emoji from list
-export function getRandomEmoji() {
-  const emojiList = ['😭','😄','😌','🤓','😎','😤','🤖','😶‍🌫️','🌏','📸','💿','👋','🌊','✨'];
-  return emojiList[Math.floor(Math.random() * emojiList.length)];
-}
-
-export function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
 }
