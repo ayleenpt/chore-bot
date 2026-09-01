@@ -54,12 +54,6 @@ function addGuildJoiner(guildId, user) {
   return true;
 }
 
-app.use(express.json({
-  verify: (req, res, buffer) => {
-    req.rawBody = buffer;
-  },
-}));
-
 function parseChoreList(rawChores) {
   return rawChores
     .split(',')
@@ -125,7 +119,6 @@ function buildAssignments(members, chores, weekStart) {
 }
 
 function buildAssignmentsWithIds(members, chores, weekStart) {
-  // members: array of { id, name }
   if (!members || !members.length) {
     return chores.map((chore) => ({ chore, assigneeId: null, assigneeName: 'No members found' }));
   }
@@ -137,24 +130,15 @@ function buildAssignmentsWithIds(members, chores, weekStart) {
     return {
       chore,
       assigneeId: member.id || null,
-      assigneeName: member.name || member.username || 'Unknown',
     };
   });
 }
 
-function buildAssignmentMessageWithMentions(assignments, weekLabel, leadInText = 'This week') {
-  const lines = assignments.map(({ chore, assigneeId, assigneeName }) => {
-    if (assigneeId) {
-      return `- ${chore}: <@${assigneeId}> (${assigneeName})`;
-    }
-    return `- ${chore}: ${assigneeName}`;
+function buildAssignmentMessageWithMentions(assignments, weekLabel) {
+  const lines = assignments.map(({ chore, assigneeId }) => {
+    return `- ${chore}: <@${assigneeId}>`;
   });
-  return `**${leadInText} chore chart (${weekLabel})**\n${lines.join('\n')}`;
-}
-
-function getMemberDisplayName(member) {
-  if (!member) return 'Unknown member';
-  return member.nick || member.user?.global_name || member.user?.username || 'Unknown member';
+  return `## Chore Chart - ${weekLabel}\n${lines.join('\n')}`;
 }
 
 async function getGuildMembers(guildId) {
@@ -180,8 +164,31 @@ async function getGuildMembers(guildId) {
   }
 }
 
+function parseIdList(rawIds) {
+  return rawIds
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+async function getRotationMembers(guildId) {
+  // Priority: explicit env list of user IDs, then persisted joiners, then guild members
+  const configured = parseIdList(process.env.CHORE_ROTATING_USER_IDS || '');
+  if (configured.length) {
+    return configured.map((id) => ({ id, username: '' }));
+  }
+
+  const joiners = getGuildJoiners(guildId);
+  if (joiners && joiners.length) {
+    return joiners.map((u) => ({ id: u.id, username: u.username || '' }));
+  }
+
+  // Fallback to guild members via API
+  return await getGuildMembers(guildId);
+}
+
 const DISHES_SCHEDULE = [
-  '### Dishes Schedule',
+  '## Dishes Schedule',
   '- **Monday**: Ayleen',
   '- **Tuesday**: Seth',
   '- **Wednesday**: Ashley',
@@ -190,15 +197,9 @@ const DISHES_SCHEDULE = [
 ]
 
 async function sendChoreChart(guildId, weekStartDate, label) {
-  // Prefer explicit joiners if present, otherwise fall back to guild members
-  const joiners = getGuildJoiners(guildId);
-  let memberObjs = [];
-  if (joiners && joiners.length) {
-    memberObjs = joiners.map((u) => ({ id: u.id, name: u.username || u.name || u.id }));
-  } else {
-    const members = await getGuildMembers(guildId);
-    memberObjs = members.length ? members.map((member) => ({ id: member.id, name: getMemberDisplayName(member) })) : [];
-  }
+  // Resolve rotation members (env CHORE_ROTATING_USER_IDS -> joiners -> guild members)
+  const members = await getRotationMembers(guildId);
+  const memberObjs = members.length ? members.map((member) => ({ id: member.id })) : [];
 
   const assignmentsWithIds = buildAssignmentsWithIds(memberObjs, CHORE_LIST, weekStartDate);
   const weekLabel = getWeekRangeLabel(weekStartDate);
@@ -206,7 +207,7 @@ async function sendChoreChart(guildId, weekStartDate, label) {
   // Build dishes schedule (this section does not ping users)
   const dishesScheduleText = DISHES_SCHEDULE.join('\n');
 
-  const content = `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel, label)}\n\n${dishesScheduleText}`;
+  const content = `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel, label)}\n${dishesScheduleText}`;
 
   const mentionUserIds = assignmentsWithIds.map((a) => a.assigneeId).filter(Boolean);
   const body = { content, allowed_mentions: mentionUserIds.length ? { users: mentionUserIds } : { parse: [] } };
@@ -253,8 +254,23 @@ function scheduleSundayAnnouncements() {
   }, 60_000);
 }
 
-app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
-  const { type, data, guild_id, channel_id } = req.body;
+app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
+  let json;
+  try {
+    if (Buffer.isBuffer(req.body)) {
+      json = JSON.parse(req.body.toString());
+    } else if (typeof req.body === 'string') {
+      json = JSON.parse(req.body);
+    } else {
+      // already-parsed object (some middleware populated it)
+      json = req.body;
+    }
+  } catch (err) {
+    console.error('Invalid interaction JSON', err);
+    return res.status(400).json({ error: 'invalid json' });
+  }
+
+  const { type, data, guild_id } = json;
 
   if (type === InteractionType.PING) {
     return res.send({ type: InteractionResponseType.PONG });
@@ -263,30 +279,38 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
   if (type === InteractionType.APPLICATION_COMMAND) {
     const { name } = data;
 
-    if (name === 'chorechart') {
-      const targetGuildId = guild_id || process.env.GUILD_ID;
+      if (name === 'chorechart') {
+        const targetGuildId = guild_id || GUILD_ID;
 
-      if (!CHANNEL_ID) {
-        return res.status(400).json({ error: 'No channel configured for chore announcements. Set CHORE_CHANNEL_ID or create a channel named "chores".' });
-      }
+        if (!targetGuildId) {
+          return res.status(400).json({ error: 'No guild configured.' });
+        }
 
-      const thisWeekStart = getMonday(new Date());
-      await sendChoreChart(targetGuildId, thisWeekStart, 'This week');
+        if (!CHANNEL_ID) {
+          return res.status(400).json({ error: 'No channel configured for chore announcements. Set CHORE_CHANNEL_ID in .env.' });
+        }
 
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: 'The chore chart has been posted to the channel.',
-        },
-      });
+        const thisWeekStart = getMonday(new Date());
+        try {
+          await sendChoreChart(targetGuildId, thisWeekStart, 'This week');
+        } catch (err) {
+          console.error('Failed to post chore chart', err);
+          return res.status(500).json({ error: 'failed to post chore chart' });
+        }
+
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: { content: 'The chore chart has been posted to the channel.' },
+        });
     }
+
     if (name === 'join') {
-      const targetGuildId = guild_id || process.env.GUILD_ID;
+      const targetGuildId = guild_id || GUILD_ID;
       if (!targetGuildId) {
         return res.status(400).json({ error: 'No guild configured.' });
       }
 
-      const user = req.body.member?.user || req.body.user;
+      const user = json.member?.user || json.user;
       if (!user || !user.id) {
         return res.status(400).json({ error: 'Could not determine user.' });
       }
