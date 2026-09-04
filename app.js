@@ -235,11 +235,6 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
         console.error('Failed to post chore chart', err);
         return res.status(500).json({ error: 'failed to post chore chart' });
       }
-
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: { content: 'The chore chart has been posted to the channel.' },
-      });
     }
 
     if (name === 'help') {
