@@ -142,7 +142,7 @@ const DISHES_SCHEDULE = [
 
 function buildDishesSchedule() {
   const lines = DISHES_SCHEDULE.map(({ day, userId }) => {
-    return `- **${day}**: <@${userId}>`;
+    return `- ${day}: <@${userId}>`;
   });
 
   return `## 🍽️ Dishes Schedule\n${lines.join('\n')}`;
