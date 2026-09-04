@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import fs from 'fs';
 import {
   InteractionResponseType,
   InteractionResponseFlags,
@@ -8,6 +9,7 @@ import {
 } from 'discord-interactions';
 import { DiscordRequest } from './utils.js';
 import { CHORE_INSTRUCTIONS } from './chore-instructions.js';
+const ASSIGNMENTS_FILE = './assignments.json';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,19 +20,45 @@ const CHORE_LIST = [
   'Floors',
   'Garbage',
 ];
-const SUNDAY = 'Sun';
-const THURSDAY = 'Thu';
-const REMINDER_HOUR = 20;
-const REMINDER_MINUTE = 0;
+const SUNDAY = 'Fri';
+const THURSDAY = 'Fri';
+const REMINDER_HOUR = 15;
+const REMINDER_MINUTE = 39;
 const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
 const GUILD_ID = process.env.GUILD_ID || null;
-const state = { lastAnnouncementKey: null, lastGarbageReminderKey: null };
+const state = {
+  lastAnnouncementKey: null,
+  lastGarbageReminderKey: null,
+  currentAssignments: null,
+};
 
-function parseChoreList(rawChores) {
-  return rawChores
-    .split(',')
-    .map((chore) => chore.trim())
-    .filter(Boolean);
+function saveAssignments(weekStartDate, assignments) {
+  const data = {
+    weekStart: weekStartDate.toISOString(),
+    assignments,
+  };
+
+  fs.writeFileSync(
+    ASSIGNMENTS_FILE,
+    JSON.stringify(data, null, 2)
+  );
+}
+
+function loadAssignments() {
+  if (!fs.existsSync(ASSIGNMENTS_FILE)) {
+    return null;
+  }
+
+  try {
+    const data = JSON.parse(
+      fs.readFileSync(ASSIGNMENTS_FILE, 'utf8')
+    );
+
+    return data;
+  } catch (error) {
+    console.error('Failed to read assignments.json:', error);
+    return null;
+  }
 }
 
 function parseIdList(rawIds) {
@@ -160,29 +188,28 @@ function buildChoreChartContent(assignmentsWithIds, weekLabel) {
     \n${dishesScheduleText}`;
 }
 
-async function sendChoreChart(guildId, weekStartDate, label) {
-  const members = await getRotationMembers(guildId);
-  const memberObjs = members.length
-    ? members.map((member) => ({ id: member.id }))
-    : [];
+function getWeekAssignments(weekStartDate) {
+  const members = getRotationMembers(GUILD_ID);
 
-  const assignmentsWithIds = buildAssignmentsWithIds(
-    memberObjs,
+  return buildAssignmentsWithIds(
+    members,
     CHORE_LIST,
     weekStartDate
   );
+}
 
+async function sendChoreChart(guildId, weekStartDate, assignmentsWithIds) {
   const weekLabel = getWeekRangeLabel(weekStartDate);
-  const content = buildChoreChartContent(assignmentsWithIds, weekLabel);
+  const content = buildChoreChartContent(
+    assignmentsWithIds,
+    weekLabel
+  );
 
-  const body = {
-    content,
-  };
-
-  // This is used by the Sunday automatic announcement.
   await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
     method: 'POST',
-    body,
+    body: {
+      content,
+    },
   });
 }
 
@@ -249,21 +276,32 @@ async function announceNextWeek() {
   const pacificToday = getPacificToday();
   const nextWeekStart = addDays(getMonday(pacificToday), 7);
 
-  await sendChoreChart(GUILD_ID, nextWeekStart);
-}
-
-async function sendGarbageReminder() {
-  const weekStartDate = getMonday(getPacificToday());
-
   const members = getRotationMembers(GUILD_ID);
 
   const assignmentsWithIds = buildAssignmentsWithIds(
     members,
     CHORE_LIST,
-    weekStartDate
+    nextWeekStart
   );
 
-  const garbageAssignment = assignmentsWithIds.find(
+  saveAssignments(nextWeekStart, assignmentsWithIds);
+
+  await sendChoreChart(
+    GUILD_ID,
+    nextWeekStart,
+    assignmentsWithIds
+  );
+}
+
+async function sendGarbageReminder() {
+  const savedData = loadAssignments();
+
+  if (!savedData || !savedData.assignments) {
+    console.log('Garbage reminder: No saved assignments found.');
+    return;
+  }
+
+  const garbageAssignment = savedData.assignments.find(
     ({ chore }) => chore.toLowerCase() === 'garbage'
   );
 

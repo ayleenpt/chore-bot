@@ -1,0 +1,25 @@
+{
+  "weekStart": "2026-09-07T07:00:00.000Z",
+  "assignments": [
+    {
+      "chore": "Guest bathroom",
+      "assigneeId": "482048258630221824"
+    },
+    {
+      "chore": "Kitchen",
+      "assigneeId": "451798259057557529"
+    },
+    {
+      "chore": "Living room",
+      "assigneeId": "797002059744018453"
+    },
+    {
+      "chore": "Floors",
+      "assigneeId": "885797282241470484"
+    },
+    {
+      "chore": "Garbage",
+      "assigneeId": "210306607987425280"
+    }
+  ]
+}
