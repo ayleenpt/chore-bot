@@ -121,9 +121,15 @@ function buildAssignmentMessageWithMentions(assignments, weekLabel) {
   return `## Chore Chart - ${weekLabel}\n${lines.join('\n')}`;
 }
 
-async function getRotationMembers(guildId) {
-  const configured = parseIdList(process.env.CHORE_ROTATING_USER_IDS || '');
-  return configured.map((id) => ({ id, username: '' }));
+function getRotationMembers(guildId) {
+  const configured = parseIdList(
+    process.env.CHORE_ROTATING_USER_IDS || ''
+  );
+
+  return configured.map((id) => ({
+    id,
+    username: '',
+  }));
 }
 
 const DISHES_SCHEDULE = [
@@ -142,8 +148,9 @@ function buildDishesSchedule() {
   return `## Dishes Schedule\n${lines.join('\n')}`;
 }
 
-async function buildChoreChartResponse(guildId, weekStartDate) {
-  const members = await getRotationMembers(guildId);
+function buildChoreChartResponse(guildId, weekStartDate) {
+  const members = getRotationMembers(guildId);
+
   const memberObjs = members.length
     ? members.map((member) => ({ id: member.id }))
     : [];
@@ -155,17 +162,20 @@ async function buildChoreChartResponse(guildId, weekStartDate) {
   );
 
   const weekLabel = getWeekRangeLabel(weekStartDate);
-  const content = buildChoreChartContent(assignmentsWithIds, weekLabel);
+  const content = buildChoreChartContent(
+    assignmentsWithIds,
+    weekLabel
+  );
 
   const mentionUserIds = [
-  ...assignmentsWithIds
-    .map((a) => a.assigneeId)
-    .filter(Boolean),
+    ...assignmentsWithIds
+      .map((a) => a.assigneeId)
+      .filter(Boolean),
 
-  ...DISHES_SCHEDULE
-    .map((dish) => dish.userId)
-    .filter(Boolean),
-];
+    ...DISHES_SCHEDULE
+      .map((dish) => dish.userId)
+      .filter(Boolean),
+  ];
 
   return {
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -183,7 +193,7 @@ function buildChoreChartContent(assignmentsWithIds, weekLabel) {
   const dishesScheduleText = buildDishesSchedule();
 
   return `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel)} 
-    ${dishesScheduleText}`;
+    \n${dishesScheduleText}`;
 }
 
 async function sendChoreChart(guildId, weekStartDate, label) {
@@ -213,9 +223,6 @@ async function sendChoreChart(guildId, weekStartDate, label) {
 
   const body = {
     content,
-    allowed_mentions: mentionUserIds.length
-      ? { users: mentionUserIds }
-      : { parse: [] },
   };
 
   // This is used by the Sunday automatic announcement.
@@ -349,28 +356,34 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
     const { name } = data;
 
     if (name === 'chorechart') {
-      const targetGuildId = guild_id || GUILD_ID;
+  console.log('Received /chorechart command');
 
-      if (!targetGuildId) {
-        return res.status(400).json({ error: 'No guild configured.' });
-      }
+  const weekStartDate = getMonday(new Date());
+  const members = getRotationMembers(guild_id);
 
-      const thisWeekStart = getMonday(new Date());
+  const assignmentsWithIds = buildAssignmentsWithIds(
+    members,
+    CHORE_LIST,
+    weekStartDate
+  );
 
-      try {
-        return res.send(
-          await buildChoreChartResponse(
-            targetGuildId,
-            thisWeekStart,
-          )
-        );
-      } catch (err) {
-        console.error('Failed to build chore chart', err);
-        return res.status(500).json({
-          error: 'failed to build chore chart',
-        });
-      }
-    }
+  const weekLabel = getWeekRangeLabel(weekStartDate);
+
+  const content = buildChoreChartContent(
+    assignmentsWithIds,
+    weekLabel
+  );
+
+  console.log('/chorechart content:', content);
+
+  return res.send({
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      content,
+      flags: InteractionResponseFlags.EPHEMERAL,
+    },
+  });
+}
 
     if (name === 'help') {
       const helpText = `
