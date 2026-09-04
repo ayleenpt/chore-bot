@@ -135,22 +135,75 @@ const DISHES_SCHEDULE = [
   '- **Friday**: Jayson',
 ]
 
-async function sendChoreChart(guildId, weekStartDate, label) {
+async function buildChoreChartResponse(guildId, weekStartDate) {
   const members = await getRotationMembers(guildId);
-  const memberObjs = members.length ? members.map((member) => ({ id: member.id })) : [];
+  const memberObjs = members.length
+    ? members.map((member) => ({ id: member.id }))
+    : [];
 
-  const assignmentsWithIds = buildAssignmentsWithIds(memberObjs, CHORE_LIST, weekStartDate);
+  const assignmentsWithIds = buildAssignmentsWithIds(
+    memberObjs,
+    CHORE_LIST,
+    weekStartDate
+  );
+
   const weekLabel = getWeekRangeLabel(weekStartDate);
+  const content = buildChoreChartContent(assignmentsWithIds, weekLabel);
 
-  // Build dishes schedule (this section does not ping users)
+  const mentionUserIds = assignmentsWithIds
+    .map((a) => a.assigneeId)
+    .filter(Boolean);
+
+  return {
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      content,
+      flags: InteractionResponseFlags.EPHEMERAL,
+      allowed_mentions: mentionUserIds.length
+        ? { users: mentionUserIds }
+        : { parse: [] },
+    },
+  };
+}
+
+function buildChoreChartContent(assignmentsWithIds, weekLabel) {
   const dishesScheduleText = DISHES_SCHEDULE.join('\n');
 
-  const content = `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel)}\n${dishesScheduleText}`;
+  return `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel)}
+${dishesScheduleText}`;
+}
 
-  const mentionUserIds = assignmentsWithIds.map((a) => a.assigneeId).filter(Boolean);
-  const body = { content, allowed_mentions: mentionUserIds.length ? { users: mentionUserIds } : { parse: [] } };
+async function sendChoreChart(guildId, weekStartDate, label) {
+  const members = await getRotationMembers(guildId);
+  const memberObjs = members.length
+    ? members.map((member) => ({ id: member.id }))
+    : [];
 
-  await DiscordRequest(`channels/${CHANNEL_ID}/messages`, { method: 'POST', body });
+  const assignmentsWithIds = buildAssignmentsWithIds(
+    memberObjs,
+    CHORE_LIST,
+    weekStartDate
+  );
+
+  const weekLabel = getWeekRangeLabel(weekStartDate);
+  const content = buildChoreChartContent(assignmentsWithIds, weekLabel);
+
+  const mentionUserIds = assignmentsWithIds
+    .map((a) => a.assigneeId)
+    .filter(Boolean);
+
+  const body = {
+    content,
+    allowed_mentions: mentionUserIds.length
+      ? { users: mentionUserIds }
+      : { parse: [] },
+  };
+
+  // This is used by the Sunday automatic announcement.
+  await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
+    method: 'POST',
+    body,
+  });
 }
 
 async function announceNextWeek() {
@@ -224,16 +277,20 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
         return res.status(400).json({ error: 'No guild configured.' });
       }
 
-      if (!CHANNEL_ID) {
-        return res.status(400).json({ error: 'No channel configured for chore announcements. Set CHORE_CHANNEL_ID in .env.' });
-      }
-
       const thisWeekStart = getMonday(new Date());
+
       try {
-        await sendChoreChart(targetGuildId, thisWeekStart, 'This week');
+        return res.send(
+          await buildChoreChartResponse(
+            targetGuildId,
+            thisWeekStart,
+          )
+        );
       } catch (err) {
-        console.error('Failed to post chore chart', err);
-        return res.status(500).json({ error: 'failed to post chore chart' });
+        console.error('Failed to build chore chart', err);
+        return res.status(500).json({
+          error: 'failed to build chore chart',
+        });
       }
     }
 
