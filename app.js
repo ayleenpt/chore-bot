@@ -400,34 +400,34 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
     const { name } = data;
 
     if (name === 'chorechart') {
-  console.log('Received /chorechart command');
+      console.log('Received /chorechart command');
 
-  const weekStartDate = getMonday(new Date());
-  const members = getRotationMembers(guild_id);
+      const weekStartDate = getMonday(new Date());
+      const members = getRotationMembers(guild_id);
 
-  const assignmentsWithIds = buildAssignmentsWithIds(
-    members,
-    CHORE_LIST,
-    weekStartDate
-  );
+      const assignmentsWithIds = buildAssignmentsWithIds(
+        members,
+        CHORE_LIST,
+        weekStartDate
+      );
 
-  const weekLabel = getWeekRangeLabel(weekStartDate);
+      const weekLabel = getWeekRangeLabel(weekStartDate);
 
-  const content = buildChoreChartContent(
-    assignmentsWithIds,
-    weekLabel
-  );
+      const content = buildChoreChartContent(
+        assignmentsWithIds,
+        weekLabel
+      );
 
-  console.log('/chorechart content:', content);
+      console.log('/chorechart content:', content);
 
-  return res.send({
-    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: {
-      content,
-      flags: InteractionResponseFlags.EPHEMERAL,
-    },
-  });
-}
+      return res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content,
+          flags: InteractionResponseFlags.EPHEMERAL,
+        },
+      });
+    }
 
     if (name === 'help') {
       const helpText = `
