@@ -20,8 +20,8 @@ const CHORE_LIST = [
 ];
 const SUNDAY = 'Sun';
 const THURSDAY = 'Thu';
-const REMINDER_HOUR = 15;
-const REMINDER_MINUTE = 25;
+const REMINDER_HOUR = 20;
+const REMINDER_MINUTE = 0;
 const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
 const GUILD_ID = process.env.GUILD_ID || null;
 const state = { lastAnnouncementKey: null, lastGarbageReminderKey: null };
@@ -333,8 +333,8 @@ function scheduleSundayChoreAnnouncement() {
   });
 }
 
-function scheduleThursdayGarbageAccouncement() {
-   scheduleTask({
+function scheduleThursdayGarbageAnnouncement() {
+   scheduleAnnouncement({
     day: THURSDAY,
     getKey: () => getWeekKey(getPacificToday()),
     stateKey: 'lastGarbageReminderKey',
