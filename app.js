@@ -377,7 +377,7 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
         ## Chore Bot Help
         - The chore bot will post a new chore chart every Sunday at 9pm.
         - Use the /chorechart command to get a reminder of this week's chore chart.
-        - Use the /kitchen, /guest-bathroom, /living-room, /floors, and /garbage commands to get instructions for each chore.
+        - Use the /dishes, /kitchen, /guest-bathroom, /living-room, /floors, and /garbage commands to get instructions for each chore.
         `;
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
