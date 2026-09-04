@@ -7,6 +7,7 @@ const SUNDAY = 'Fri';
 const THURSDAY = 'Fri';
 const REMINDER_HOUR = 16;
 const REMINDER_MINUTE = 0;
+const RECYCLING_ANCHOR = '2026-09-04';
 const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
 const GUILD_ID = process.env.GUILD_ID || null;
 const state = {
@@ -107,6 +108,26 @@ function getPacificToday() {
   );
 }
 
+function isRecyclingWeek(date = new Date()) {
+  const anchor = new Date(`${RECYCLING_ANCHOR}T00:00:00`);
+  const target = new Date(date);
+
+  // Get the Friday of the target week
+  const day = target.getDay(); // Sunday = 0, Friday = 5
+  const daysSinceFriday = (day - 5 + 7) % 7;
+
+  target.setDate(target.getDate() - daysSinceFriday);
+  target.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round(
+    (target - anchor) / (1000 * 60 * 60 * 24)
+  );
+
+  const weeksSinceAnchor = Math.round(diffDays / 7);
+
+  return weeksSinceAnchor % 2 === 0;
+}
+
 async function announceNextWeek() {
   const pacificToday = getPacificToday();
   const nextWeekStart = addDays(getMonday(pacificToday), 7);
@@ -137,9 +158,15 @@ async function sendGarbageReminder() {
     return;
   }
 
-  const content =
-    `🗑️ **Garbage reminder!** <@${garbageAssignment.assigneeId}> ` +
+  var content =
+    `### 🗑️ Garbage reminder!` +
+    `\n<@${garbageAssignment.assigneeId}> ` +
     `please take the trash to the curb **before tomorrow morning at 8:00 AM**.`;
+
+  if (isRecyclingWeek()) {
+    content += '\n♻️ **This is a recycling week**, ' + 
+      'so please also take the recycling to the curb.';
+  }
 
   await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
     method: 'POST',
