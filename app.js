@@ -118,7 +118,7 @@ function buildAssignmentMessageWithMentions(assignments, weekLabel) {
   const lines = assignments.map(({ chore, assigneeId }) => {
     return `- ${chore}: <@${assigneeId}>`;
   });
-  return `## Chore Chart - ${weekLabel}\n${lines.join('\n')}`;
+  return `## 🧹 Chore Chart - ${weekLabel}\n${lines.join('\n')}`;
 }
 
 function getRotationMembers(guildId) {
@@ -145,48 +145,7 @@ function buildDishesSchedule() {
     return `- **${day}**: <@${userId}>`;
   });
 
-  return `## Dishes Schedule\n${lines.join('\n')}`;
-}
-
-function buildChoreChartResponse(guildId, weekStartDate) {
-  const members = getRotationMembers(guildId);
-
-  const memberObjs = members.length
-    ? members.map((member) => ({ id: member.id }))
-    : [];
-
-  const assignmentsWithIds = buildAssignmentsWithIds(
-    memberObjs,
-    CHORE_LIST,
-    weekStartDate
-  );
-
-  const weekLabel = getWeekRangeLabel(weekStartDate);
-  const content = buildChoreChartContent(
-    assignmentsWithIds,
-    weekLabel
-  );
-
-  const mentionUserIds = [
-    ...assignmentsWithIds
-      .map((a) => a.assigneeId)
-      .filter(Boolean),
-
-    ...DISHES_SCHEDULE
-      .map((dish) => dish.userId)
-      .filter(Boolean),
-  ];
-
-  return {
-    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: {
-      content,
-      flags: InteractionResponseFlags.EPHEMERAL,
-      allowed_mentions: mentionUserIds.length
-        ? { users: mentionUserIds }
-        : { parse: [] },
-    },
-  };
+  return `## 🍽️ Dishes Schedule\n${lines.join('\n')}`;
 }
 
 function buildChoreChartContent(assignmentsWithIds, weekLabel) {
@@ -211,16 +170,6 @@ async function sendChoreChart(guildId, weekStartDate, label) {
   const weekLabel = getWeekRangeLabel(weekStartDate);
   const content = buildChoreChartContent(assignmentsWithIds, weekLabel);
 
-  const mentionUserIds = [
-  ...assignmentsWithIds
-    .map((a) => a.assigneeId)
-    .filter(Boolean),
-
-  ...DISHES_SCHEDULE
-    .map((dish) => dish.userId)
-    .filter(Boolean),
-];
-
   const body = {
     content,
   };
@@ -230,6 +179,51 @@ async function sendChoreChart(guildId, weekStartDate, label) {
     method: 'POST',
     body,
   });
+}
+
+async function sendGarbageReminder() {
+  const parts = getPacificDateParts();
+
+  const pacificToday = new Date(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day)
+  );
+
+  const weekStartDate = getMonday(pacificToday);
+
+  const members = getRotationMembers(GUILD_ID);
+
+  const assignmentsWithIds = buildAssignmentsWithIds(
+    members,
+    CHORE_LIST,
+    weekStartDate
+  );
+
+  const garbageAssignment = assignmentsWithIds.find(
+    ({ chore }) => chore.toLowerCase() === 'garbage'
+  );
+
+  if (!garbageAssignment || !garbageAssignment.assigneeId) {
+    console.log('Garbage reminder: No garbage assignee found.');
+    return;
+  }
+
+  const content =
+    `<@${garbageAssignment.assigneeId}> ` +
+    `🗑️ **Garbage reminder!** Please take the trash to the curb ` +
+    `**before tomorrow morning at 8:00 AM**.`;
+
+  await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
+    method: 'POST',
+    body: {
+      content,
+    },
+  });
+
+  console.log(
+    `Sent garbage reminder to ${garbageAssignment.assigneeId}`
+  );
 }
 
 async function announceNextWeek() {
@@ -330,6 +324,56 @@ function scheduleSundayAnnouncements() {
   }, 60_000);
 }
 
+function scheduleThursdayGarbageReminder() {
+  setInterval(async () => {
+    const parts = getPacificDateParts();
+
+    const isThursday = parts.weekday === 'Thu';
+    const hour = Number(parts.hour);
+    const minute = Number(parts.minute);
+
+    if (!process.env.GUILD_ID) return;
+    if (!CHANNEL_ID) return;
+
+    // Thursday at 8:00 PM or later
+    const isReminderTime =
+      isThursday && (hour > 20 || (hour === 20 && minute >= 0));
+
+    if (!isReminderTime) {
+      return;
+    }
+
+    // Use the current week's Monday as the unique key.
+    const pacificToday = new Date(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day)
+    );
+
+    const weekKey = getWeekKey(pacificToday);
+
+    // Don't send the reminder more than once during the same week.
+    if (state.lastGarbageReminderKey === weekKey) {
+      return;
+    }
+
+    try {
+      await sendGarbageReminder();
+
+      state.lastGarbageReminderKey = weekKey;
+
+      console.log(
+        `Posted garbage reminder for ${weekKey}`
+      );
+    } catch (error) {
+      console.error(
+        'Could not send the garbage reminder',
+        error
+      );
+    }
+  }, 60_000);
+}
+
 app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
   let json;
   try {
@@ -420,6 +464,7 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
 });
 
 scheduleSundayAnnouncements();
+scheduleThursdayGarbageReminder();
 
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);
