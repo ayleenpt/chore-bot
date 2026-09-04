@@ -207,40 +207,99 @@ async function sendChoreChart(guildId, weekStartDate, label) {
 }
 
 async function announceNextWeek() {
-  const nextWeekStart = addDays(getMonday(new Date()), 7);
+  const parts = getPacificDateParts();
+
+  const pacificToday = new Date(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day)
+  );
+
+  const nextWeekStart = addDays(getMonday(pacificToday), 7);
+
   await sendChoreChart(GUILD_ID, nextWeekStart, 'Next week');
 }
 
-function shouldRunWeeklyAnnouncement() {
-  const now = new Date();
-  return (
-    now.getDay() === 0 &&
-    now.getHours() >= SUNDAY_HOUR &&
-    now.getMinutes() >= SUNDAY_MINUTE
+
+function getPacificDateParts(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+
+  return Object.fromEntries(
+    parts
+      .filter(({ type }) => type !== 'literal')
+      .map(({ type, value }) => [type, value])
   );
+}
+
+function getPacificWeekKey(date = new Date()) {
+  const parts = getPacificDateParts(date);
+
+  // Create a date using the Pacific calendar date.
+  const localDate = new Date(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day)
+  );
+
+  return getWeekKey(localDate);
+}
+
+function shouldRunWeeklyAnnouncement() {
+  const parts = getPacificDateParts();
+
+  const isSunday = parts.weekday === 'Sun';
+  const hour = Number(parts.hour);
+  const minute = Number(parts.minute);
+
+  // Run any time from 9:00 PM onward on Sunday.
+  return isSunday && (hour > SUNDAY_HOUR ||
+    (hour === SUNDAY_HOUR && minute >= SUNDAY_MINUTE));
 }
 
 function scheduleSundayAnnouncements() {
   setInterval(async () => {
     if (!process.env.GUILD_ID) return;
-
     if (!CHANNEL_ID) return;
 
     if (!shouldRunWeeklyAnnouncement()) {
       return;
     }
 
-    const weekKey = getWeekKey(addDays(getMonday(new Date()), 7));
+    // Use the Pacific calendar date when determining which week's
+    // announcement has already been posted.
+    const now = new Date();
+    const weekKey = getPacificWeekKey(
+      new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+    );
+
     if (state.lastAnnouncementKey === weekKey) {
       return;
     }
 
     try {
       await announceNextWeek();
+
       state.lastAnnouncementKey = weekKey;
-      console.log(`Posted next week's chore chart for ${weekKey}`);
+
+      console.log(
+        `Posted next week's chore chart for ${weekKey}`
+      );
     } catch (error) {
-      console.error('Could not send the scheduled chore chart', error);
+      console.error(
+        'Could not send the scheduled chore chart',
+        error
+      );
     }
   }, 60_000);
 }
