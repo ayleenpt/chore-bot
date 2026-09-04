@@ -3,23 +3,23 @@
   "assignments": [
     {
       "chore": "Guest bathroom",
-      "assigneeId": "482048258630221824"
-    },
-    {
-      "chore": "Kitchen",
       "assigneeId": "451798259057557529"
     },
     {
-      "chore": "Living room",
+      "chore": "Kitchen",
       "assigneeId": "797002059744018453"
     },
     {
+      "chore": "Living room",
+      "assigneeId": "482048258630221824"
+    },
+    {
       "chore": "Floors",
-      "assigneeId": "885797282241470484"
+      "assigneeId": "210306607987425280"
     },
     {
       "chore": "Garbage",
-      "assigneeId": "210306607987425280"
+      "assigneeId": "885797282241470484"
     }
   ]
 }

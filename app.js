@@ -1,384 +1,18 @@
 import 'dotenv/config';
 import express from 'express';
-import fs from 'fs';
 import {
   InteractionResponseType,
   InteractionResponseFlags,
   InteractionType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
-import { DiscordRequest } from './utils.js';
 import { CHORE_INSTRUCTIONS } from './chore-instructions.js';
-const ASSIGNMENTS_FILE = './assignments.json';
+import { getWeekRangeLabel } from './date-utils.js';
+import { buildChoreChartContent, loadAssignments } from './build-chore-chart-utils.js';
+import { scheduleSundayChoreAnnouncement, scheduleThursdayGarbageAnnouncement } from './automated-reminders-utils.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const CHORE_LIST = [
-  'Guest bathroom',
-  'Kitchen',
-  'Living room',
-  'Floors',
-  'Garbage',
-];
-const SUNDAY = 'Fri';
-const THURSDAY = 'Fri';
-const REMINDER_HOUR = 15;
-const REMINDER_MINUTE = 39;
-const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
-const GUILD_ID = process.env.GUILD_ID || null;
-const state = {
-  lastAnnouncementKey: null,
-  lastGarbageReminderKey: null,
-  currentAssignments: null,
-};
-
-function saveAssignments(weekStartDate, assignments) {
-  const data = {
-    weekStart: weekStartDate.toISOString(),
-    assignments,
-  };
-
-  fs.writeFileSync(
-    ASSIGNMENTS_FILE,
-    JSON.stringify(data, null, 2)
-  );
-}
-
-function loadAssignments() {
-  if (!fs.existsSync(ASSIGNMENTS_FILE)) {
-    return null;
-  }
-
-  try {
-    const data = JSON.parse(
-      fs.readFileSync(ASSIGNMENTS_FILE, 'utf8')
-    );
-
-    return data;
-  } catch (error) {
-    console.error('Failed to read assignments.json:', error);
-    return null;
-  }
-}
-
-function parseIdList(rawIds) {
-  return rawIds
-    .split(',')
-    .map((id) => id.trim())
-    .filter(Boolean);
-}
-
-function getMonday(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function addDays(date, amount) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
-}
-
-function formatDate(date) {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-  }).format(date);
-}
-
-function getWeekRangeLabel(startDate) {
-  const endDate = addDays(startDate, 6);
-  return `${formatDate(startDate)} - ${formatDate(endDate)}`;
-}
-
-function getWeekKey(date) {
-  return getMonday(date).toISOString().slice(0, 10);
-}
-
-function getDeterministicShuffle(members, seed) {
-  const items = [...members];
-  let stableSeed = Math.abs(seed) % 2147483647;
-
-  for (let i = items.length - 1; i > 0; i -= 1) {
-    stableSeed = (stableSeed * 16807) % 2147483647;
-    const j = stableSeed % (i + 1);
-    [items[i], items[j]] = [items[j], items[i]];
-  }
-
-  return items;
-}
-
-function buildChoreInstructions(choreName) {
-  const instructions = CHORE_INSTRUCTIONS[choreName];
-
-  if (!instructions) {
-    return 'No instructions found for this chore.';
-  }
-
-  const title = choreName
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-
-  const bullets = instructions
-    .map(instruction => `- ${instruction}`)
-    .join('\n');
-
-  return `## ${title}\n${bullets}`;
-}
-
-function buildAssignmentsWithIds(members, chores, weekStart) {
-  if (!members || !members.length) {
-    return chores.map((chore) => ({ chore, assigneeId: null, assigneeName: 'No members found' }));
-  }
-
-  const rotation = getDeterministicShuffle(members, weekStart.getTime());
-
-  return chores.map((chore, index) => {
-    const member = rotation[index % rotation.length];
-    return {
-      chore,
-      assigneeId: member.id || null,
-    };
-  });
-}
-
-function buildAssignmentMessageWithMentions(assignments, weekLabel) {
-  const lines = assignments.map(({ chore, assigneeId }) => {
-    return `- ${chore}: <@${assigneeId}>`;
-  });
-  return `## 🧹 Chore Chart - ${weekLabel}\n${lines.join('\n')}`;
-}
-
-function getRotationMembers(guildId) {
-  const configured = parseIdList(
-    process.env.CHORE_ROTATING_USER_IDS || ''
-  );
-
-  return configured.map((id) => ({
-    id,
-    username: '',
-  }));
-}
-
-const DISHES_SCHEDULE = [
-  { day: 'Monday', userId: '482048258630221824' },
-  { day: 'Tuesday', userId: '451798259057557529' },
-  { day: 'Wednesday', userId: '885797282241470484' },
-  { day: 'Thursday', userId: '797002059744018453' },
-  { day: 'Friday', userId: '210306607987425280' },
-];
-
-function buildDishesSchedule() {
-  const lines = DISHES_SCHEDULE.map(({ day, userId }) => {
-    return `- ${day}: <@${userId}>`;
-  });
-
-  return `## 🍽️ Dishes Schedule\n${lines.join('\n')}`;
-}
-
-function buildChoreChartContent(assignmentsWithIds, weekLabel) {
-  const dishesScheduleText = buildDishesSchedule();
-
-  return `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel)} 
-    \n${dishesScheduleText}`;
-}
-
-function getWeekAssignments(weekStartDate) {
-  const members = getRotationMembers(GUILD_ID);
-
-  return buildAssignmentsWithIds(
-    members,
-    CHORE_LIST,
-    weekStartDate
-  );
-}
-
-async function sendChoreChart(guildId, weekStartDate, assignmentsWithIds) {
-  const weekLabel = getWeekRangeLabel(weekStartDate);
-  const content = buildChoreChartContent(
-    assignmentsWithIds,
-    weekLabel
-  );
-
-  await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
-    method: 'POST',
-    body: {
-      content,
-    },
-  });
-}
-
-function canSendChoreMessages() {
-  return Boolean(GUILD_ID && CHANNEL_ID);
-}
-
-function getPacificDateParts(date = new Date()) {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    weekday: 'short',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(date);
-
-  return Object.fromEntries(
-    parts
-      .filter(({ type }) => type !== 'literal')
-      .map(({ type, value }) => [type, value])
-  );
-}
-
-function getPacificWeekKey(date = new Date()) {
-  const parts = getPacificDateParts(date);
-
-  // Create a date using the Pacific calendar date.
-  const localDate = new Date(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day)
-  );
-
-  return getWeekKey(localDate);
-}
-
-function shouldRunScheduledTask(scheduledDay = String) {
-  const parts = getPacificDateParts();
-
-  const isScheduledDay = parts.weekday === scheduledDay;
-  const hour = Number(parts.hour);
-  const minute = Number(parts.minute);
-
-  return isScheduledDay && (hour > REMINDER_HOUR ||
-    (hour === REMINDER_HOUR && minute >= REMINDER_MINUTE));
-}
-
-function getPacificToday() {
-  const parts = getPacificDateParts();
-
-  return new Date(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day)
-  );
-}
-
-async function announceNextWeek() {
-  const pacificToday = getPacificToday();
-  const nextWeekStart = addDays(getMonday(pacificToday), 7);
-
-  const members = getRotationMembers(GUILD_ID);
-
-  const assignmentsWithIds = buildAssignmentsWithIds(
-    members,
-    CHORE_LIST,
-    nextWeekStart
-  );
-
-  saveAssignments(nextWeekStart, assignmentsWithIds);
-
-  await sendChoreChart(
-    GUILD_ID,
-    nextWeekStart,
-    assignmentsWithIds
-  );
-}
-
-async function sendGarbageReminder() {
-  const savedData = loadAssignments();
-
-  if (!savedData || !savedData.assignments) {
-    console.log('Garbage reminder: No saved assignments found.');
-    return;
-  }
-
-  const garbageAssignment = savedData.assignments.find(
-    ({ chore }) => chore.toLowerCase() === 'garbage'
-  );
-
-  if (!garbageAssignment || !garbageAssignment.assigneeId) {
-    console.log('Garbage reminder: No garbage assignee found.');
-    return;
-  }
-
-  const content =
-    `<@${garbageAssignment.assigneeId}> ` +
-    `🗑️ **Garbage reminder!** Please take the trash to the curb ` +
-    `**before tomorrow morning at 8:00 AM**.`;
-
-  await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
-    method: 'POST',
-    body: {
-      content,
-    },
-  });
-
-  console.log(
-    `Sent garbage reminder to ${garbageAssignment.assigneeId}`
-  );
-}
-
-function scheduleAnnouncement({
-  day,
-  getKey,
-  stateKey,
-  task,
-}) {
-  setInterval(async () => {
-    const key = getKey();
-    
-    if (!canSendChoreMessages() ||
-        !shouldRunScheduledTask(day) ||
-        state[stateKey] === key) {
-      return;
-    }
-
-    try {
-      await task();
-
-      state[stateKey] = key;
-
-      console.log(`Scheduled task completed for ${key}`);
-    } catch (error) {
-      console.error('Scheduled task failed', error);
-    }
-  }, 60_000);
-}
-
-function scheduleSundayChoreAnnouncement() {
-  scheduleAnnouncement({
-    day: SUNDAY,
-
-    getKey: () => {
-      const now = new Date();
-
-      return getPacificWeekKey(
-        new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-      );
-    },
-
-    stateKey: 'lastAnnouncementKey',
-    task: announceNextWeek,
-  });
-}
-
-function scheduleThursdayGarbageAnnouncement() {
-   scheduleAnnouncement({
-    day: THURSDAY,
-    getKey: () => getWeekKey(getPacificToday()),
-    stateKey: 'lastGarbageReminderKey',
-    task: sendGarbageReminder,
-  });
-}
 
 app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
   let json;
@@ -408,23 +42,25 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
     if (name === 'chorechart') {
       console.log('Received /chorechart command');
 
-      const weekStartDate = getMonday(new Date());
-      const members = getRotationMembers(guild_id);
+      const savedData = loadAssignments();
 
-      const assignmentsWithIds = buildAssignmentsWithIds(
-        members,
-        CHORE_LIST,
-        weekStartDate
-      );
+      if (!savedData || !savedData.assignments) {
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: 'No chore chart has been generated yet.',
+            flags: InteractionResponseFlags.EPHEMERAL,
+          },
+        });
+      }
 
+      const weekStartDate = new Date(savedData.weekStart);
       const weekLabel = getWeekRangeLabel(weekStartDate);
 
       const content = buildChoreChartContent(
-        assignmentsWithIds,
+        savedData.assignments,
         weekLabel
       );
-
-      console.log('/chorechart content:', content);
 
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,

@@ -24,7 +24,7 @@ export const CHORE_INSTRUCTIONS = {
   floors: [
     'Sweep all floors on the main level',
     'Vacuum the dining room',
-    'Mop the kitchen and bathroom if necessary',
+    'Mop the kitchen, bathroom, and hallway floors',
   ],
 
   garbage: [
