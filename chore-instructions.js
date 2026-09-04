@@ -33,4 +33,11 @@ export const CHORE_INSTRUCTIONS = {
     'Take the garbage and compost bins to the curb on Thursday night or early Friday morning for pickup',
     'Take the recycling bin to the curb if it is a recycling week (every other week)',
   ],
+
+  dishes: [
+    'Unload the dishwasher and put away clean dishes from the night before',
+    'Load the dishwasher with dirty dishes',
+    'Run the dishwasher when it gets full, or at the end of the day',
+    'Remind anyone who has dirty dishes that need to be handwashed to wash them and put them away',
+  ]
 };

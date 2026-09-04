@@ -127,13 +127,20 @@ async function getRotationMembers(guildId) {
 }
 
 const DISHES_SCHEDULE = [
-  '## Dishes Schedule',
-  '- **Monday**: Ayleen',
-  '- **Tuesday**: Seth',
-  '- **Wednesday**: Ashley',
-  '- **Thursday**: Arielle',
-  '- **Friday**: Jayson',
-]
+  { day: 'Monday', userId: '482048258630221824' },
+  { day: 'Tuesday', userId: '451798259057557529' },
+  { day: 'Wednesday', userId: '885797282241470484' },
+  { day: 'Thursday', userId: '797002059744018453' },
+  { day: 'Friday', userId: '210306607987425280' },
+];
+
+function buildDishesSchedule() {
+  const lines = DISHES_SCHEDULE.map(({ day, userId }) => {
+    return `- **${day}**: <@${userId}>`;
+  });
+
+  return `## Dishes Schedule\n${lines.join('\n')}`;
+}
 
 async function buildChoreChartResponse(guildId, weekStartDate) {
   const members = await getRotationMembers(guildId);
@@ -150,9 +157,15 @@ async function buildChoreChartResponse(guildId, weekStartDate) {
   const weekLabel = getWeekRangeLabel(weekStartDate);
   const content = buildChoreChartContent(assignmentsWithIds, weekLabel);
 
-  const mentionUserIds = assignmentsWithIds
+  const mentionUserIds = [
+  ...assignmentsWithIds
     .map((a) => a.assigneeId)
-    .filter(Boolean);
+    .filter(Boolean),
+
+  ...DISHES_SCHEDULE
+    .map((dish) => dish.userId)
+    .filter(Boolean),
+];
 
   return {
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -167,10 +180,10 @@ async function buildChoreChartResponse(guildId, weekStartDate) {
 }
 
 function buildChoreChartContent(assignmentsWithIds, weekLabel) {
-  const dishesScheduleText = DISHES_SCHEDULE.join('\n');
+  const dishesScheduleText = buildDishesSchedule();
 
-  return `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel)}
-${dishesScheduleText}`;
+  return `${buildAssignmentMessageWithMentions(assignmentsWithIds, weekLabel)} 
+    ${dishesScheduleText}`;
 }
 
 async function sendChoreChart(guildId, weekStartDate, label) {
@@ -188,9 +201,15 @@ async function sendChoreChart(guildId, weekStartDate, label) {
   const weekLabel = getWeekRangeLabel(weekStartDate);
   const content = buildChoreChartContent(assignmentsWithIds, weekLabel);
 
-  const mentionUserIds = assignmentsWithIds
+  const mentionUserIds = [
+  ...assignmentsWithIds
     .map((a) => a.assigneeId)
-    .filter(Boolean);
+    .filter(Boolean),
+
+  ...DISHES_SCHEDULE
+    .map((dish) => dish.userId)
+    .filter(Boolean),
+];
 
   const body = {
     content,

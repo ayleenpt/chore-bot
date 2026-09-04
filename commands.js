@@ -37,6 +37,11 @@ const COMMANDS = [
     description: 'Show the garbage chore instructions',
     type: 1,
   },
+  {
+    name: 'dishes',
+    description: 'Show the dishes chore instructions',
+    type: 1,
+  }
 ];
 
 InstallGuildCommands(process.env.APP_ID, process.env.GUILD_ID, COMMANDS);
