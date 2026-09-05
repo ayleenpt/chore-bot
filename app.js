@@ -8,7 +8,7 @@ import {
 } from 'discord-interactions';
 import { CHORE_INSTRUCTIONS } from './chore-instructions.js';
 import { getWeekRangeLabel } from './date-utils.js';
-import { buildChoreChartContent, loadAssignments } from './build-chore-chart-utils.js';
+import { buildChoreChartContent, buildChoreInstructions, loadAssignments } from './build-chore-chart-utils.js';
 import { scheduleSundayChoreAnnouncement, scheduleThursdayGarbageAnnouncement } from './automated-reminders-utils.js';
 
 const app = express();

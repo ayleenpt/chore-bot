@@ -3,9 +3,9 @@ import { DiscordRequest } from './utils.js';
 import { buildAssignmentsWithIds, buildChoreChartContent, loadAssignments, saveAssignments } from './build-chore-chart-utils.js';
 import { getMonday, addDays, getWeekKey, getWeekRangeLabel } from './date-utils.js';
 
-const SUNDAY = 'Fri';
-const THURSDAY = 'Fri';
-const REMINDER_HOUR = 16;
+const SUNDAY = 'Sun';
+const THURSDAY = 'Thu';
+const REMINDER_HOUR = 20;
 const REMINDER_MINUTE = 0;
 const RECYCLING_ANCHOR = '2026-09-04';
 const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
