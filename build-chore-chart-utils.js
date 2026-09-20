@@ -15,7 +15,7 @@ export const DISHES_SCHEDULE = [
 const CHORE_LIST = [
   'Guest bathroom',
   'Kitchen',
-  'Living room',
+  'Shared spaces',
   'Floors',
   'Garbage',
 ];

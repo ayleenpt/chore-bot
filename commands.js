@@ -23,8 +23,8 @@ const COMMANDS = [
     type: 1,
   },
   {
-    name: 'living-room',
-    description: 'Show the living room chore instructions',
+    name: 'shared-spaces',
+    description: 'Show the shared spaces chore instructions',
     type: 1,
   },
   {
