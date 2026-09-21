@@ -107,6 +107,7 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
 
 scheduleSundayChoreAnnouncement();
 scheduleThursdayGarbageAnnouncement();
+scheduleDailyGarbageAnnouncement();
 scheduleDailyDishesAnnouncement();
 
 app.listen(PORT, () => {

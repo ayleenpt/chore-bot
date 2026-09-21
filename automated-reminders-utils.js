@@ -17,13 +17,14 @@ const REMINDER_MINUTE = 0;
 const RECYCLING_ANCHOR = '2026-09-04';
 const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
 const GUILD_ID = process.env.GUILD_ID || null;
+
 const state = {
   lastAnnouncementKey: null,
   lastGarbageReminderKey: null,
   lastDishesReminderKey: null,
+  lastDailyGarbageReminderKey: null,
   currentAssignments: null,
 };
-
 
 function parseIdList(rawIds) {
   return rawIds
@@ -159,7 +160,7 @@ async function announceNextWeek() {
   await sendChoreChart(nextWeekStart, assignmentsWithIds);
 }
 
-async function sendGarbageReminder() {
+async function sendWeeklyGarbageReminder() {
   const savedData = loadAssignments();
 
   if (!savedData || !savedData.assignments) {
@@ -198,6 +199,42 @@ async function sendGarbageReminder() {
   );
 }
 
+async function sendDailyGarbageReminder() {
+  const savedData = loadAssignments();
+
+  if (!savedData || !savedData.assignments) {
+    console.log('Garbage reminder: No saved assignments found.');
+    return;
+  }
+
+  const garbageAssignment = savedData.assignments.find(
+    ({ chore }) => chore.toLowerCase() === 'garbage'
+  );
+
+  if (!garbageAssignment || !garbageAssignment.assigneeId) {
+    console.log('Garbage reminder: No garbage assignee found.');
+    return;
+  }
+
+  const content =
+    `### 🗑️ Garbage reminder!` +
+    `\n<@${garbageAssignment.assigneeId}> ` +
+    `please check the garbage, recycling, and compost in the kitchen ` +
+    `and empty any bins that are full.` +
+    `\n*Use the /garbage command to review the chore instructions.*`;
+
+  await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
+    method: 'POST',
+    body: {
+      content,
+    },
+  });
+
+  console.log(
+    `Sent daily garbage reminder to ${garbageAssignment.assigneeId}`
+  );
+}
+
 async function sendDishesReminder() {
   const pacificToday = getPacificToday();
 
@@ -226,8 +263,8 @@ async function sendDishesReminder() {
     `### 🍽️ Dishes reminder!` +
     `\n<@${dishAssignment.userId}> ` +
     `you are assigned to do the dishes today. ` +
-    `Please empty the dishwasher today and run it this evening.\n` +
-    `*Use the /dishes command to review the chore instructions.* 🧼`;
+    `Please empty the dishwasher today and run it this evening.` +
+    `\n*Use the /dishes command to review the chore instructions.*`;
 
   await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
     method: 'POST',
@@ -295,7 +332,17 @@ export function scheduleThursdayGarbageAnnouncement() {
     day: THURSDAY,
     getKey: () => getWeekKey(getPacificToday()),
     stateKey: 'lastGarbageReminderKey',
-    task: sendGarbageReminder,
+    task: sendWeeklyGarbageReminder,
+  });
+}
+
+export function scheduleDailyGarbageAnnouncement() {
+  scheduleAnnouncement({
+    hour: DAILY_REMINDER_HOUR,
+    minute: REMINDER_MINUTE,
+    getKey: () => getPacificToday().toISOString().slice(0, 10),
+    stateKey: 'lastDailyGarbageReminderKey',
+    task: sendDailyGarbageReminder,
   });
 }
 
