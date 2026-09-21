@@ -151,9 +151,13 @@ async function announceNextWeek() {
   const pacificToday = getPacificToday();
   const nextWeekStart = addDays(getMonday(pacificToday), 7);
 
+  const existingData = loadAssignments();
   const members = getRotationMembers();
 
-  const assignmentsWithIds = buildAssignmentsWithIds(members, nextWeekStart);
+  const assignmentsWithIds = buildAssignmentsWithIds(
+    members,
+    existingData?.assignments
+  );
 
   saveAssignments(nextWeekStart, assignmentsWithIds);
 

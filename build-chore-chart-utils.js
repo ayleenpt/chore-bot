@@ -20,17 +20,6 @@ const CHORE_LIST = [
   'Garbage',
 ];
 
-function shuffleMembers(members) {
-  const items = [...members];
-
-  for (let i = items.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [items[i], items[j]] = [items[j], items[i]];
-  }
-
-  return items;
-}
-
 function buildDishesSchedule() {
   const lines = DISHES_SCHEDULE.map(({ day, userId }) => {
     return `- ${day}: <@${userId}>`;
@@ -75,18 +64,7 @@ export function loadAssignments() {
   }
 }
 
-function getRotationWeekNumber(date) {
-  const anchor = new Date('2026-09-14T00:00:00');
-  const target = new Date(date);
-
-  const diffDays = Math.floor(
-    (target - anchor) / (1000 * 60 * 60 * 24)
-  );
-
-  return Math.floor(diffDays / 7);
-}
-
-export function buildAssignmentsWithIds(members, weekStartDate) {
+export function buildAssignmentsWithIds(members, existingAssignments = null) {
   if (!members || !members.length) {
     return CHORE_LIST.map((chore) => ({
       chore,
@@ -95,17 +73,28 @@ export function buildAssignmentsWithIds(members, weekStartDate) {
     }));
   }
 
-  const weekNumber = getRotationWeekNumber(weekStartDate);
-
-  return CHORE_LIST.map((chore, index) => {
-    const memberIndex = (index + weekNumber) % members.length;
-    const member = members[memberIndex];
-
-    return {
+  // First run: assign members in their configured order.
+  if (!existingAssignments || !existingAssignments.length) {
+    return CHORE_LIST.map((chore, index) => ({
       chore,
-      assigneeId: member.id || null,
-    };
-  });
+      assigneeId: members[index % members.length].id,
+    }));
+  }
+
+  // Rotate the existing assignments by one person.
+  const assigneeIds = existingAssignments.map(
+    ({ assigneeId }) => assigneeId
+  );
+
+  const rotatedAssigneeIds = [
+    ...assigneeIds.slice(1),
+    assigneeIds[0],
+  ];
+
+  return existingAssignments.map(({ chore }, index) => ({
+    chore,
+    assigneeId: rotatedAssigneeIds[index],
+  }));
 }
 
 export function buildChoreChartContent(assignmentsWithIds, weekLabel) {

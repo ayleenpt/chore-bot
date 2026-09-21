@@ -9,7 +9,12 @@ import {
 import { CHORE_INSTRUCTIONS } from './chore-instructions.js';
 import { getWeekRangeLabel } from './date-utils.js';
 import { buildChoreChartContent, buildChoreInstructions, loadAssignments } from './build-chore-chart-utils.js';
-import { scheduleDailyDishesAnnouncement, scheduleSundayChoreAnnouncement, scheduleThursdayGarbageAnnouncement } from './automated-reminders-utils.js';
+import {
+  scheduleDailyDishesAnnouncement,
+  scheduleDailyGarbageAnnouncement,
+  scheduleSundayChoreAnnouncement,
+  scheduleThursdayGarbageAnnouncement,
+} from './automated-reminders-utils.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
