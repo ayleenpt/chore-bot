@@ -75,7 +75,18 @@ export function loadAssignments() {
   }
 }
 
-export function buildAssignmentsWithIds(members) {
+function getRotationWeekNumber(date) {
+  const anchor = new Date('2026-09-14T00:00:00');
+  const target = new Date(date);
+
+  const diffDays = Math.floor(
+    (target - anchor) / (1000 * 60 * 60 * 24)
+  );
+
+  return Math.floor(diffDays / 7);
+}
+
+export function buildAssignmentsWithIds(members, weekStartDate) {
   if (!members || !members.length) {
     return CHORE_LIST.map((chore) => ({
       chore,
@@ -84,10 +95,11 @@ export function buildAssignmentsWithIds(members) {
     }));
   }
 
-  const rotation = shuffleMembers(members);
+  const weekNumber = getRotationWeekNumber(weekStartDate);
 
   return CHORE_LIST.map((chore, index) => {
-    const member = rotation[index % rotation.length];
+    const memberIndex = (index + weekNumber) % members.length;
+    const member = members[memberIndex];
 
     return {
       chore,
