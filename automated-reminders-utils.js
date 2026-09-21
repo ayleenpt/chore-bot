@@ -11,8 +11,8 @@ import { getMonday, addDays, getWeekKey, getWeekRangeLabel } from './date-utils.
 
 const SUNDAY = 'Sun';
 const THURSDAY = 'Thu';
-const REMINDER_HOUR = 20;
-const DISHES_REMINDER_HOUR = 8;
+const WEEKLY_REMINDER_HOUR = 20;
+const DAILY_REMINDER_HOUR = 8;
 const REMINDER_MINUTE = 0;
 const RECYCLING_ANCHOR = '2026-09-04';
 const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
@@ -98,7 +98,7 @@ function getPacificWeekKey(date = new Date()) {
 
 function shouldRunScheduledTask(
   scheduledDay = null,
-  scheduledHour = REMINDER_HOUR,
+  scheduledHour = WEEKLY_REMINDER_HOUR,
   scheduledMinute = REMINDER_MINUTE
 ) {
   const parts = getPacificDateParts();
@@ -243,7 +243,7 @@ async function sendDishesReminder() {
 
 function scheduleAnnouncement({
   day = null,
-  hour = REMINDER_HOUR,
+  hour = WEEKLY_REMINDER_HOUR,
   minute = REMINDER_MINUTE,
   getKey,
   stateKey,
@@ -301,7 +301,7 @@ export function scheduleThursdayGarbageAnnouncement() {
 
 export function scheduleDailyDishesAnnouncement() {
   scheduleAnnouncement({
-    hour: DISHES_REMINDER_HOUR,
+    hour: DAILY_REMINDER_HOUR,
     minute: REMINDER_MINUTE,
     getKey: () => getPacificToday().toISOString().slice(0, 10),
     stateKey: 'lastDishesReminderKey',
