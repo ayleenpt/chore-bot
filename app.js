@@ -9,7 +9,7 @@ import {
 import { CHORE_INSTRUCTIONS } from './chore-instructions.js';
 import { getWeekRangeLabel } from './date-utils.js';
 import { buildChoreChartContent, buildChoreInstructions, loadAssignments } from './build-chore-chart-utils.js';
-import { scheduleSundayChoreAnnouncement, scheduleThursdayGarbageAnnouncement } from './automated-reminders-utils.js';
+import { scheduleDailyDishesAnnouncement, scheduleSundayChoreAnnouncement, scheduleThursdayGarbageAnnouncement } from './automated-reminders-utils.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -107,6 +107,7 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
 
 scheduleSundayChoreAnnouncement();
 scheduleThursdayGarbageAnnouncement();
+scheduleDailyDishesAnnouncement();
 
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);

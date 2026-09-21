@@ -1,11 +1,18 @@
 import 'dotenv/config';
 import { DiscordRequest } from './utils.js';
-import { buildAssignmentsWithIds, buildChoreChartContent, loadAssignments, saveAssignments } from './build-chore-chart-utils.js';
+import {
+  buildAssignmentsWithIds,
+  buildChoreChartContent,
+  loadAssignments,
+  saveAssignments,
+  DISHES_SCHEDULE,
+} from './build-chore-chart-utils.js';
 import { getMonday, addDays, getWeekKey, getWeekRangeLabel } from './date-utils.js';
 
 const SUNDAY = 'Sun';
 const THURSDAY = 'Thu';
 const REMINDER_HOUR = 20;
+const DISHES_REMINDER_HOUR = 8;
 const REMINDER_MINUTE = 0;
 const RECYCLING_ANCHOR = '2026-09-04';
 const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
@@ -13,8 +20,10 @@ const GUILD_ID = process.env.GUILD_ID || null;
 const state = {
   lastAnnouncementKey: null,
   lastGarbageReminderKey: null,
+  lastDishesReminderKey: null,
   currentAssignments: null,
 };
+
 
 function parseIdList(rawIds) {
   return rawIds
@@ -87,15 +96,24 @@ function getPacificWeekKey(date = new Date()) {
   return getWeekKey(localDate);
 }
 
-function shouldRunScheduledTask(scheduledDay = String) {
+function shouldRunScheduledTask(
+  scheduledDay = null,
+  scheduledHour = REMINDER_HOUR,
+  scheduledMinute = REMINDER_MINUTE
+) {
   const parts = getPacificDateParts();
 
-  const isScheduledDay = parts.weekday === scheduledDay;
+  if (scheduledDay && parts.weekday !== scheduledDay) {
+    return false;
+  }
+
   const hour = Number(parts.hour);
   const minute = Number(parts.minute);
 
-  return isScheduledDay && (hour > REMINDER_HOUR ||
-    (hour === REMINDER_HOUR && minute >= REMINDER_MINUTE));
+  return (
+    hour > scheduledHour ||
+    (hour === scheduledHour && minute >= scheduledMinute)
+  );
 }
 
 function getPacificToday() {
@@ -180,18 +198,65 @@ async function sendGarbageReminder() {
   );
 }
 
+async function sendDishesReminder() {
+  const pacificToday = getPacificToday();
+
+  const dayNames = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+
+  const today = dayNames[pacificToday.getDay()];
+
+  const dishAssignment = DISHES_SCHEDULE.find(
+    ({ day }) => day === today
+  );
+
+  if (!dishAssignment) {
+    return;
+  }
+
+
+  const content =
+    `### 🍽️ Dishes reminder!` +
+    `\n<@${dishAssignment.userId}> ` +
+    `you are assigned to do the dishes today. ` +
+    `Please empty the dishwasher today and run it this evening.\n` +
+    `*Use the /dishes command to review the chore instructions.* 🧼`;
+
+  await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
+    method: 'POST',
+    body: {
+      content,
+    },
+  });
+
+  console.log(
+    `Sent dishes reminder to ${dishAssignment.userId} for ${today}`
+  );
+}
+
 function scheduleAnnouncement({
-  day,
+  day = null,
+  hour = REMINDER_HOUR,
+  minute = REMINDER_MINUTE,
   getKey,
   stateKey,
   task,
 }) {
   setInterval(async () => {
     const key = getKey();
-    
-    if (!canSendChoreMessages() ||
-        !shouldRunScheduledTask(day) ||
-        state[stateKey] === key) {
+
+    if (
+      !canSendChoreMessages() ||
+      !shouldRunScheduledTask(day, hour, minute) ||
+      state[stateKey] === key
+    ) {
       return;
     }
 
@@ -206,6 +271,7 @@ function scheduleAnnouncement({
     }
   }, 60_000);
 }
+
 
 export function scheduleSundayChoreAnnouncement() {
   scheduleAnnouncement({
@@ -230,5 +296,15 @@ export function scheduleThursdayGarbageAnnouncement() {
     getKey: () => getWeekKey(getPacificToday()),
     stateKey: 'lastGarbageReminderKey',
     task: sendGarbageReminder,
+  });
+}
+
+export function scheduleDailyDishesAnnouncement() {
+  scheduleAnnouncement({
+    hour: DISHES_REMINDER_HOUR,
+    minute: REMINDER_MINUTE,
+    getKey: () => getPacificToday().toISOString().slice(0, 10),
+    stateKey: 'lastDishesReminderKey',
+    task: sendDishesReminder,
   });
 }
