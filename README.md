@@ -28,7 +28,7 @@ PORT=3000
 Notes:
 - `GUILD_ID` is used to fetch the roster for the weekly rotation.
 - `CHORE_CHANNEL_ID` is used for automated Sunday night posts.
-- The default announcement time is Sunday at 9:00 PM in the server's local time.
+- The default announcement time is Sunday at 8:00 PM in the server's local time.
 
 New optional environment variables for dishes tagging:
 

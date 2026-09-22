@@ -12,9 +12,11 @@ import { buildChoreChartContent, buildChoreInstructions, loadAssignments } from 
 import {
   scheduleDailyDishesAnnouncement,
   scheduleDailyGarbageAnnouncement,
+  scheduleDailyChoreAnnouncement,
   scheduleSundayChoreAnnouncement,
   scheduleThursdayGarbageAnnouncement,
 } from './automated-reminders-utils.js';
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -79,7 +81,7 @@ app.post('/interactions', express.raw({ type: 'application/json' }), verifyKeyMi
     if (name === 'help') {
       const helpText = `
         ## Chore Bot Help
-        - The chore bot will post a new chore chart every Sunday at 9pm.
+        - The chore bot will post a new chore chart every Sunday at 8pm.
         - Use the /chorechart command to get a reminder of this week's chore chart.
         - Use the /dishes, /kitchen, /guest-bathroom, /shared-spaces, /floors, and /garbage commands to get instructions for each chore.
         `;
@@ -114,6 +116,7 @@ scheduleSundayChoreAnnouncement();
 scheduleThursdayGarbageAnnouncement();
 scheduleDailyGarbageAnnouncement();
 scheduleDailyDishesAnnouncement();
+scheduleDailyChoreAnnouncement();
 
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);

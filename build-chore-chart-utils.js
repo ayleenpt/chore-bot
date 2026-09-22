@@ -35,10 +35,15 @@ function buildAssignmentMessageWithMentions(assignments, weekLabel) {
   return `## 🧹 Chore Chart - ${weekLabel}\n${lines.join('\n')}`;
 }
 
-export function saveAssignments(weekStartDate, assignments) {
+export function saveAssignments(
+  weekStartDate,
+  assignments,
+  acknowledgedChores = []
+) {
   const data = {
     weekStart: weekStartDate.toISOString(),
     assignments,
+    acknowledgedChores,
   };
 
   fs.writeFileSync(
@@ -46,6 +51,7 @@ export function saveAssignments(weekStartDate, assignments) {
     JSON.stringify(data, null, 2)
   );
 }
+
 
 export function loadAssignments() {
   if (!fs.existsSync(ASSIGNMENTS_FILE)) {

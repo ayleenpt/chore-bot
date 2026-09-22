@@ -17,12 +17,26 @@ const REMINDER_MINUTE = 0;
 const RECYCLING_ANCHOR = '2026-09-04';
 const CHANNEL_ID = process.env.CHORE_CHANNEL_ID || null;
 const GUILD_ID = process.env.GUILD_ID || null;
+const CHORE_COMPLETE_EMOJI = '✅';
+const ENCODED_EMOJI = encodeURIComponent(CHORE_COMPLETE_EMOJI);
+
+const DAILY_REMINDER_CHORES = [
+  'Guest bathroom',
+  'Kitchen',
+  'Shared spaces',
+  'Floors',
+];
+
 
 const state = {
   lastAnnouncementKey: null,
   lastGarbageReminderKey: null,
   lastDishesReminderKey: null,
   lastDailyGarbageReminderKey: null,
+
+  lastDailyChoreReminderKey: null,
+  dailyChoreReminderMessageId: null,
+
   currentAssignments: null,
 };
 
@@ -59,10 +73,6 @@ async function sendChoreChart(weekStartDate, assignmentsWithIds) {
   });
 }
 
-function canSendChoreMessages() {
-  return Boolean(GUILD_ID && CHANNEL_ID);
-}
-
 function getPacificDateParts(date = new Date()) {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Los_Angeles',
@@ -97,6 +107,41 @@ function getPacificWeekKey(date = new Date()) {
   return getWeekKey(localDate);
 }
 
+function getPacificToday() {
+  const parts = getPacificDateParts();
+
+  return new Date(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day)
+  );
+}
+
+function getOutstandingDailyChores(savedData) {
+  if (!savedData || !savedData.assignments) {
+    return [];
+  }
+
+  const acknowledgedChores = savedData.acknowledgedChores || [];
+
+  return savedData.assignments.filter(
+    ({ chore }) =>
+      DAILY_REMINDER_CHORES.includes(chore) &&
+      !acknowledgedChores.includes(chore)
+  );
+}
+
+async function getReactionUsers(messageId) {
+  return DiscordRequest(
+    `channels/${CHANNEL_ID}/messages/${messageId}/reactions/${ENCODED_EMOJI}`,
+    { method: 'GET' }
+  );
+}
+
+function canSendChoreMessages() {
+  return Boolean(GUILD_ID && CHANNEL_ID);
+}
+
 function shouldRunScheduledTask(
   scheduledDay = null,
   scheduledHour = WEEKLY_REMINDER_HOUR,
@@ -114,16 +159,6 @@ function shouldRunScheduledTask(
   return (
     hour > scheduledHour ||
     (hour === scheduledHour && minute >= scheduledMinute)
-  );
-}
-
-function getPacificToday() {
-  const parts = getPacificDateParts();
-
-  return new Date(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day)
   );
 }
 
@@ -147,6 +182,48 @@ function isRecyclingWeek(date = new Date()) {
   return weeksSinceAnchor % 2 === 0;
 }
 
+async function processDailyChoreReactions() {
+  const messageId = state.dailyChoreReminderMessageId;
+
+  if (!messageId) return;
+
+  const savedData = loadAssignments();
+  if (!savedData || !savedData.assignments) return;
+
+  const reactions = await getReactionUsers(messageId);
+  if (!Array.isArray(reactions)) return;
+
+  const reactedUserIds = new Set(reactions.map((user) => user.id));
+  const acknowledgedChores = savedData.acknowledgedChores || [];
+  let changed = false;
+
+  for (const assignment of savedData.assignments) {
+    const { chore, assigneeId } = assignment;
+
+    if (!DAILY_REMINDER_CHORES.includes(chore)) continue;
+    if (acknowledgedChores.includes(chore)) continue;
+
+    if (reactedUserIds.has(assigneeId)) {
+      acknowledgedChores.push(chore);
+      changed = true;
+      console.log(`${chore} acknowledged by ${assigneeId}`);
+    }
+  }
+
+  if (!changed) return;
+
+  saveAssignments(
+    new Date(savedData.weekStart),
+    savedData.assignments,
+    acknowledgedChores
+  );
+
+  console.log(
+    'Updated acknowledged chores:',
+    acknowledgedChores
+  );
+}
+
 async function announceNextWeek() {
   const pacificToday = getPacificToday();
   const nextWeekStart = addDays(getMonday(pacificToday), 7);
@@ -159,7 +236,7 @@ async function announceNextWeek() {
     existingData?.assignments
   );
 
-  saveAssignments(nextWeekStart, assignmentsWithIds);
+  saveAssignments(nextWeekStart, assignmentsWithIds, []);
 
   await sendChoreChart(nextWeekStart, assignmentsWithIds);
 }
@@ -282,6 +359,67 @@ async function sendDishesReminder() {
   );
 }
 
+async function sendDailyChoreReminder() {
+  const savedData = loadAssignments();
+
+  if (!savedData || !savedData.assignments) {
+    console.log('Daily chore reminder: No saved assignments found.');
+    return null;
+  }
+
+  const outstandingChores = getOutstandingDailyChores(savedData);
+
+  if (!outstandingChores.length) {
+    console.log('Daily chore reminder: All chores have been acknowledged.');
+    return null;
+  }
+
+  const lines = outstandingChores.map(
+    ({ chore, assigneeId }) => `- ${chore}: <@${assigneeId}>`
+  );
+
+  const content =
+    `### 🧹 Daily chore reminder!\n` +
+    `Please react with ${CHORE_COMPLETE_EMOJI} ` +
+    `when you have completed your assigned chore.\n\n` +
+    lines.join('\n') +
+    `\n\n*Use the /guest-bathroom, /kitchen, /shared-spaces, and /floors ` +
+    `commands to review each chore's instructions.*`;
+
+  const response = await DiscordRequest(
+    `channels/${CHANNEL_ID}/messages`,
+    {
+      method: 'POST',
+      body: {
+        content,
+      },
+    }
+  );
+
+  const messageId = response.id;
+
+  if (!messageId) {
+    console.error(
+      'Daily chore reminder: Discord did not return a message ID.'
+    );
+  }
+
+  try {
+    await DiscordRequest(
+      `channels/${CHANNEL_ID}/messages/${messageId}/reactions/${ENCODED_EMOJI}/@me`,
+      { method: 'PUT' }
+    );
+  } catch (error) {
+    console.error(
+      'Failed to add completion reaction to daily chore reminder:',
+      error
+    );
+  }
+
+  console.log(`Sent daily chore reminder ${messageId}`);
+  return messageId;
+}
+
 function scheduleAnnouncement({
   day = null,
   hour = WEEKLY_REMINDER_HOUR,
@@ -358,4 +496,33 @@ export function scheduleDailyDishesAnnouncement() {
     stateKey: 'lastDishesReminderKey',
     task: sendDishesReminder,
   });
+}
+
+export function scheduleDailyChoreAnnouncement() {
+  scheduleAnnouncement({
+    hour: DAILY_REMINDER_HOUR,
+    minute: REMINDER_MINUTE,
+    getKey: () => getPacificToday().toISOString().slice(0, 10),
+    stateKey: 'lastDailyChoreReminderKey',
+    task: async () => {
+      const messageId = await sendDailyChoreReminder();
+      state.dailyChoreReminderMessageId = messageId;
+    },
+  });
+
+  // Check for reactions every minute.
+  setInterval(async () => {
+    if (!canSendChoreMessages()) {
+      return;
+    }
+
+    try {
+      await processDailyChoreReactions();
+    } catch (error) {
+      console.error(
+        'Failed to process daily chore reactions',
+        error
+      );
+    }
+  }, 60_000);
 }
