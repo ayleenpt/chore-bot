@@ -340,7 +340,7 @@ async function sendDishesReminder() {
   if (!dishAssignment) {
     content =
       `### 🍽️ Dishes reminder!` +
-      `Nobody is assigned to do the dishes today. ` +
+      `\nNobody is assigned to do the dishes today. ` +
       `Please help out by putting your own dishes in the dishwasher, ` +
       `and running it if it gets full.`
   } else {
@@ -360,8 +360,10 @@ async function sendDishesReminder() {
     },
   });
 
+  const recipient = dishAssignment ? dishAssignment.userId : 'nobody';
+
   console.log(
-    `Sent dishes reminder to ${dishAssignment.userId} for ${today}`
+    `Sent dishes reminder to ${recipient} for ${today}`
   );
 }
 
