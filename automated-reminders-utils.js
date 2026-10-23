@@ -179,7 +179,7 @@ function isRecyclingWeek(date = new Date()) {
 
   const weeksSinceAnchor = Math.round(diffDays / 7);
 
-  return weeksSinceAnchor % 2 === 0;
+  return weeksSinceAnchor % 2 === 1;
 }
 
 async function processDailyChoreReactions() {
