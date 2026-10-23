@@ -8,8 +8,8 @@ export const DISHES_SCHEDULE = [
   { day: 'Monday', userId: '482048258630221824' },
   { day: 'Tuesday', userId: '451798259057557529' },
   { day: 'Wednesday', userId: '885797282241470484' },
-  { day: 'Thursday', userId: '797002059744018453' },
   { day: 'Friday', userId: '210306607987425280' },
+  { day: 'Sunday', userId: '797002059744018453' },
 ];
 
 const CHORE_LIST = [
@@ -93,8 +93,8 @@ export function buildAssignmentsWithIds(members, existingAssignments = null) {
   );
 
   const rotatedAssigneeIds = [
-    ...assigneeIds.slice(1),
-    assigneeIds[0],
+    assigneeIds[assigneeIds.length - 1],
+    ...assigneeIds.slice(0, -1),
   ];
 
   return existingAssignments.map(({ chore }, index) => ({
