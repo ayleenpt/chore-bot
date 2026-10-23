@@ -1,6 +1,6 @@
 export const CHORE_INSTRUCTIONS = {
   kitchen: [
-    'Wipe down counters and stove',
+    'Wipe down counters and stove, including under the grate',
     'Wipe down inside of microwave',
     'Throw away expired food and uneaten leftovers from fridge',
     'Wipe down the fridge shelves and drawers',
@@ -10,13 +10,13 @@ export const CHORE_INSTRUCTIONS = {
     'Wipe down the sink and countertop',
     'Clean the mirror',
     'Clean the toilet',
-    'Restock toilet paper if needed',
+    'Restock toilet paper and make sure there is extra under the sink',
     'Take out the garbage if full',
   ],
 
   'shared-spaces': [
-    'Pick up and put away clutter',
-    'Dust surfaces',
+    'Pick up and put away clutter. Personal items can go on the staircases to be put away by the owner',
+    'Dust surfaces and wipe tables',
     'Straighten furniture and cushions',
   ],
 
@@ -30,7 +30,7 @@ export const CHORE_INSTRUCTIONS = {
     'Clean the bins if they are dirty or smelly',
     'Replace all garbage bags',
     'Take the garbage and compost bins to the curb on Thursday night or early Friday morning for pickup',
-    'Take the recycling bin to the curb if it is a recycling week (every other week)',
+    'Take the recycling bins to the curb if it is a recycling week (every other week)',
   ],
 
   dishes: [

@@ -300,7 +300,7 @@ async function sendDailyGarbageReminder() {
   const content =
     `### 🗑️ Garbage reminder!` +
     `\n<@${garbageAssignment.assigneeId}> ` +
-    `please check the garbage, recycling, and compost in the kitchen ` +
+    `please check the garbage, recycling, and compost ` +
     `and empty any bins that are full.` +
     `\n*Use the /garbage command to review the chore instructions.*`;
 
@@ -335,17 +335,23 @@ async function sendDishesReminder() {
     ({ day }) => day === today
   );
 
+  let content = ''
+
   if (!dishAssignment) {
-    return;
+    content =
+      `### 🍽️ Dishes reminder!` +
+      `Nobody is assigned to do the dishes today. ` +
+      `Please help out by putting your own dishes in the dishwasher, ` +
+      `and running it if it gets full.`
+  } else {
+    content =
+      `### 🍽️ Dishes reminder!` +
+      `\n<@${dishAssignment.userId}> ` +
+      `you are assigned to do the dishes today. ` +
+      `Please empty and run the dishwasher today, ` +
+      `and wipe down the kitchen counters. ` +
+      `\n*Use the /dishes command to review the chore instructions.*`;
   }
-
-
-  const content =
-    `### 🍽️ Dishes reminder!` +
-    `\n<@${dishAssignment.userId}> ` +
-    `you are assigned to do the dishes today. ` +
-    `Please empty the dishwasher today and run it this evening.` +
-    `\n*Use the /dishes command to review the chore instructions.*`;
 
   await DiscordRequest(`channels/${CHANNEL_ID}/messages`, {
     method: 'POST',
