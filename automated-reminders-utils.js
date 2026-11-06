@@ -448,9 +448,8 @@ function scheduleAnnouncement({
     }
 
     try {
-      await task();
-
       state[stateKey] = key;
+      await task();
 
       console.log(`Scheduled task completed for ${key}`);
     } catch (error) {
@@ -458,7 +457,6 @@ function scheduleAnnouncement({
     }
   }, 60_000);
 }
-
 
 export function scheduleSundayChoreAnnouncement() {
   scheduleAnnouncement({
